@@ -13,7 +13,7 @@ A tool that downloads remote files and generates Go embed directives for them.
 ## Installation
 
 ```bash
-go install github.com/zdunecki/go-remote-embed@latest
+go get -tool github.com/zdunecki/go-remote-embed@latest
 ```
 
 ## Usage
