@@ -1,0 +1,4 @@
+go-output: embed.go
+output: ./.schemas/<short_name>
+files:
+  "https://raw.githubusercontent.com/abc/clickhouse/create-tables.sql"
