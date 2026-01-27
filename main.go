@@ -137,8 +137,15 @@ func main() {
       }
     }
     varName := toGoVarName(shortName, cfg.VarNaming)
-    // Use relative path for go:embed
-    relEmbedPath := filepath.ToSlash(filepath.Join(outPath, shortName))
+    // Use relative path for go:embed (relative to the directory containing go-output)
+    fullPath := filepath.Join(outPath, shortName)
+    goOutputDir := filepath.Dir(cfg.GoOutput)
+    relEmbedPath := fullPath
+    if goOutputDir != "." && goOutputDir != "" {
+      // Make path relative to the go-output directory
+      relEmbedPath, _ = filepath.Rel(goOutputDir, fullPath)
+    }
+    relEmbedPath = filepath.ToSlash(relEmbedPath)
     embedVars = append(embedVars, fmt.Sprintf("//go:embed %s\nvar %s string\n", relEmbedPath, varName))
   }
 
