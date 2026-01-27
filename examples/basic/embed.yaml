@@ -1,4 +1,5 @@
+output: ./.schemas
 go-output: embed.go
-output: ./.schemas/<short_name>
+go-mod: test
 files:
-  "https://raw.githubusercontent.com/abc/clickhouse/create-tables.sql"
+  - "https://raw.githubusercontent.com/livesession/xyd/refs/heads/master/package.json"

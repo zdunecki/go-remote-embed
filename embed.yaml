@@ -1,0 +1,5 @@
+go-output: embed.go
+go-mod: main
+output: .
+files:
+  - hello.txt

@@ -1,4 +1,4 @@
-//go:generate go tool remoteembed
+//go:generate go tool go-remote-embed
 
 package main
 

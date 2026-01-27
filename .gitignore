@@ -1,0 +1,46 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+
+# Output of build tools
+bin/
+build/
+dist/
+
+# Go workspace file
+go.work
+go.work.sum
+
+# Go vendor directory
+vendor/
+
+# Compiled object files
+*.o
+*.a
+*.out
+
+# Test binary, coverage, and results
+*.coverprofile
+*.test
+*.prof
+coverage.out
+
+# IDE/editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.bak
+*.tmp
+
+# OS generated files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Icon?
+Desktop.ini
