@@ -61,45 +61,85 @@ func main() {
     outDir = "."
   }
 
-  // First pass: download/copy files and collect embed paths
+  // First, expand all file URLs and extract source paths
+  var fileInfos []fileInfo
+
+  for _, fileURL := range cfg.Files {
+    expandedURL := expandEnvVars(fileURL)
+    var sourcePath, shortName string
+
+    if strings.HasPrefix(expandedURL, "http://") || strings.HasPrefix(expandedURL, "https://") {
+      // For URLs, extract path after the domain
+      parts := strings.Split(expandedURL, "/")
+      shortName = parts[len(parts)-1]
+      // Use path parts after protocol and domain (skip first 3: "", "", "domain")
+      if len(parts) > 3 {
+        sourcePath = strings.Join(parts[3:], "/")
+      } else {
+        sourcePath = shortName
+      }
+    } else {
+      // For local files, use the file path
+      shortName = filepath.Base(expandedURL)
+      sourcePath = filepath.ToSlash(expandedURL)
+    }
+
+    fileInfos = append(fileInfos, fileInfo{
+      originalURL: fileURL,
+      expandedURL: expandedURL,
+      sourcePath:  sourcePath,
+      shortName:   shortName,
+    })
+  }
+
+  // Calculate unique relative paths for each file
+  uniquePaths := resolveUniquePaths(fileInfos)
+
+  // Now download/copy files using the unique paths
   type embedInfo struct {
     relEmbedPath string
-    shortName    string
+    uniquePath   string
   }
   var embedInfos []embedInfo
 
-  for _, fileURL := range cfg.Files {
-    // Expand environment variables in file URL
-    fileURL = expandEnvVars(fileURL)
-    var shortName string
-    var outPath string
-    var absOutPath string
-    if strings.HasPrefix(fileURL, "http://") || strings.HasPrefix(fileURL, "https://") {
-      parts := strings.Split(fileURL, "/")
-      shortName = parts[len(parts)-1]
-      outPath = strings.ReplaceAll(outDir, "<short_name>", strings.TrimSuffix(shortName, filepath.Ext(shortName)))
-      absOutPath = filepath.Join(cwd, outPath)
-      if err := os.MkdirAll(absOutPath, 0755); err != nil {
-        fmt.Fprintf(os.Stderr, "failed to create dir %s: %v\n", absOutPath, err)
-        os.Exit(1)
-      }
-      localFile := filepath.Join(absOutPath, shortName)
-      req, err := http.NewRequest("GET", fileURL, nil)
+  for i, fi := range fileInfos {
+    uniquePath := uniquePaths[i]
+    outPath := strings.ReplaceAll(outDir, "<short_name>", strings.TrimSuffix(fi.shortName, filepath.Ext(fi.shortName)))
+
+    // Build the full output path including unique subdirectories
+    var fullOutPath string
+    if uniquePath != fi.shortName {
+      // There's a unique prefix path to add
+      fullOutPath = filepath.Join(outPath, filepath.Dir(uniquePath))
+    } else {
+      fullOutPath = outPath
+    }
+
+    absOutPath := filepath.Join(cwd, fullOutPath)
+    if err := os.MkdirAll(absOutPath, 0755); err != nil {
+      fmt.Fprintf(os.Stderr, "failed to create dir %s: %v\n", absOutPath, err)
+      os.Exit(1)
+    }
+
+    localFile := filepath.Join(absOutPath, fi.shortName)
+
+    if strings.HasPrefix(fi.expandedURL, "http://") || strings.HasPrefix(fi.expandedURL, "https://") {
+      req, err := http.NewRequest("GET", fi.expandedURL, nil)
       if err != nil {
-        fmt.Fprintf(os.Stderr, "failed to create request for %s: %v\n", fileURL, err)
+        fmt.Fprintf(os.Stderr, "failed to create request for %s: %v\n", fi.expandedURL, err)
         os.Exit(1)
       }
-      if cfg.GithubToken != "" && (strings.Contains(fileURL, "github.com") || strings.Contains(fileURL, "githubusercontent.com")) {
+      if cfg.GithubToken != "" && (strings.Contains(fi.expandedURL, "github.com") || strings.Contains(fi.expandedURL, "githubusercontent.com")) {
         req.Header.Set("Authorization", "Bearer "+cfg.GithubToken)
       }
       resp, err := http.DefaultClient.Do(req)
       if err != nil {
-        fmt.Fprintf(os.Stderr, "failed to download %s: %v\n", fileURL, err)
+        fmt.Fprintf(os.Stderr, "failed to download %s: %v\n", fi.expandedURL, err)
         os.Exit(1)
       }
       defer resp.Body.Close()
       if resp.StatusCode != 200 {
-        fmt.Fprintf(os.Stderr, "failed to download %s: %s\n", fileURL, resp.Status)
+        fmt.Fprintf(os.Stderr, "failed to download %s: %s\n", fi.expandedURL, resp.Status)
         os.Exit(1)
       }
       f, err := os.Create(localFile)
@@ -114,57 +154,45 @@ func main() {
         os.Exit(1)
       }
     } else {
-      // Treat as local file path
-      shortName = filepath.Base(fileURL)
-      outPath = strings.ReplaceAll(outDir, "<short_name>", strings.TrimSuffix(shortName, filepath.Ext(shortName)))
-      absOutPath = filepath.Join(cwd, outPath)
-      if err := os.MkdirAll(absOutPath, 0755); err != nil {
-        fmt.Fprintf(os.Stderr, "failed to create dir %s: %v\n", absOutPath, err)
-        os.Exit(1)
-      }
-      srcFile := filepath.Join(cwd, fileURL)
-      dstFile := filepath.Join(absOutPath, shortName)
+      srcFile := filepath.Join(cwd, fi.expandedURL)
       src, err := os.Open(srcFile)
       if err != nil {
         fmt.Fprintf(os.Stderr, "failed to open source file %s: %v\n", srcFile, err)
         os.Exit(1)
       }
       defer src.Close()
-      dst, err := os.Create(dstFile)
+      dst, err := os.Create(localFile)
       if err != nil {
-        fmt.Fprintf(os.Stderr, "failed to create destination file %s: %v\n", dstFile, err)
+        fmt.Fprintf(os.Stderr, "failed to create destination file %s: %v\n", localFile, err)
         os.Exit(1)
       }
       _, err = io.Copy(dst, src)
       dst.Close()
       if err != nil {
-        fmt.Fprintf(os.Stderr, "failed to copy file to %s: %v\n", dstFile, err)
+        fmt.Fprintf(os.Stderr, "failed to copy file to %s: %v\n", localFile, err)
         os.Exit(1)
       }
     }
 
     // Calculate relative embed path
-    fullPath := filepath.Join(outPath, shortName)
+    fullPath := filepath.Join(fullOutPath, fi.shortName)
     goOutputDir := filepath.Dir(cfg.GoOutput)
     relEmbedPath := fullPath
     if goOutputDir != "." && goOutputDir != "" {
       relEmbedPath, _ = filepath.Rel(goOutputDir, fullPath)
     }
     relEmbedPath = filepath.ToSlash(relEmbedPath)
-    embedInfos = append(embedInfos, embedInfo{relEmbedPath: relEmbedPath, shortName: shortName})
+    embedInfos = append(embedInfos, embedInfo{relEmbedPath: relEmbedPath, uniquePath: uniquePath})
   }
 
-  // Resolve unique variable names
-  embedPaths := make([]string, len(embedInfos))
-  for i, info := range embedInfos {
-    embedPaths[i] = info.relEmbedPath
-  }
-  varNames := resolveUniqueVarNames(embedPaths, cfg.VarNaming)
-
-  // Generate embed vars
+  // Generate variable names from unique paths
   var embedVars []string
-  for i, info := range embedInfos {
-    embedVars = append(embedVars, fmt.Sprintf("//go:embed %s\nvar %s string\n", info.relEmbedPath, varNames[i]))
+  for _, info := range embedInfos {
+    varName := toPascalCase(strings.TrimSuffix(info.uniquePath, filepath.Ext(info.uniquePath)))
+    if cfg.VarNaming == "snake" {
+      varName = toGoVarName(info.uniquePath, "snake")
+    }
+    embedVars = append(embedVars, fmt.Sprintf("//go:embed %s\nvar %s string\n", info.relEmbedPath, varName))
   }
 
   // 3. Detect package name
@@ -311,37 +339,108 @@ func toPascalCase(name string) string {
   return result
 }
 
+// fileInfo holds information about a file to be embedded
+type fileInfo struct {
+  originalURL string
+  expandedURL string
+  sourcePath  string // path portion for uniqueness calculation
+  shortName   string
+}
+
+// resolveUniquePaths takes file infos and returns the minimum unique path for each file
+// by including parent directory parts from the right until all paths are unique
+func resolveUniquePaths(files []fileInfo) []string {
+  result := make([]string, len(files))
+
+  // Count occurrences of each filename
+  nameCount := make(map[string][]int)
+  for i, f := range files {
+    nameCount[f.shortName] = append(nameCount[f.shortName], i)
+  }
+
+  for i, f := range files {
+    if len(nameCount[f.shortName]) == 1 {
+      // Unique filename, just use the filename
+      result[i] = f.shortName
+    } else {
+      // Need to find minimum unique path from right
+      pathParts := strings.Split(f.sourcePath, "/")
+
+      // Try increasing depths until we find a unique path
+      for depth := 1; depth <= len(pathParts); depth++ {
+        startIdx := len(pathParts) - depth
+        if startIdx < 0 {
+          startIdx = 0
+        }
+        candidatePath := strings.Join(pathParts[startIdx:], "/")
+
+        // Check if this path is unique among files with same shortName
+        isUnique := true
+        for _, otherIdx := range nameCount[f.shortName] {
+          if otherIdx == i {
+            continue
+          }
+          otherParts := strings.Split(files[otherIdx].sourcePath, "/")
+          otherStartIdx := len(otherParts) - depth
+          if otherStartIdx < 0 {
+            otherStartIdx = 0
+          }
+          otherPath := strings.Join(otherParts[otherStartIdx:], "/")
+          if otherPath == candidatePath {
+            isUnique = false
+            break
+          }
+        }
+
+        if isUnique {
+          result[i] = candidatePath
+          break
+        }
+      }
+
+      // Fallback to full path if nothing is unique
+      if result[i] == "" {
+        result[i] = f.sourcePath
+      }
+    }
+  }
+
+  return result
+}
+
 // resolveUniqueVarNames takes a list of embed paths and returns unique variable names
 // by including parent directory parts when there are duplicates
 func resolveUniqueVarNames(paths []string, naming string) []string {
   // First pass: get base var names and detect duplicates
   baseNames := make([]string, len(paths))
-  nameCount := make(map[string]int)
+  nameToIndices := make(map[string][]int)
 
   for i, p := range paths {
     baseName := filepath.Base(p)
     varName := toGoVarName(baseName, naming)
     baseNames[i] = varName
-    nameCount[varName]++
+    nameToIndices[varName] = append(nameToIndices[varName], i)
   }
 
-  // Second pass: for duplicates, include more path components
+  // Second pass: for duplicates, find minimum depth that makes all unique
   result := make([]string, len(paths))
-  usedNames := make(map[string]bool)
 
   for i, p := range paths {
     varName := baseNames[i]
+    indices := nameToIndices[varName]
 
-    if nameCount[varName] > 1 {
-      // Need to make unique - include parent directories
+    if len(indices) > 1 {
+      // Need to make unique - find minimum depth where this path differs from all others
       pathParts := strings.Split(filepath.ToSlash(p), "/")
-      // Try adding more path components until unique
+
       for depth := 2; depth <= len(pathParts); depth++ {
         startIdx := len(pathParts) - depth
         if startIdx < 0 {
           startIdx = 0
         }
-        relevantParts := pathParts[startIdx:]
+        relevantParts := make([]string, len(pathParts[startIdx:]))
+        copy(relevantParts, pathParts[startIdx:])
+
         // Build var name from path parts (excluding extension from last part)
         lastPart := relevantParts[len(relevantParts)-1]
         lastPart = strings.TrimSuffix(lastPart, filepath.Ext(lastPart))
@@ -367,14 +466,55 @@ func resolveUniqueVarNames(paths []string, naming string) []string {
           // For pascal case: use toPascalCase
           candidate = toPascalCase(strings.Join(relevantParts, "/"))
         }
-        if !usedNames[candidate] {
+
+        // Check if this candidate is unique among all paths with same base name
+        isUnique := true
+        for _, otherIdx := range indices {
+          if otherIdx == i {
+            continue
+          }
+          otherParts := strings.Split(filepath.ToSlash(paths[otherIdx]), "/")
+          otherStartIdx := len(otherParts) - depth
+          if otherStartIdx < 0 {
+            otherStartIdx = 0
+          }
+          otherRelevantParts := make([]string, len(otherParts[otherStartIdx:]))
+          copy(otherRelevantParts, otherParts[otherStartIdx:])
+          otherLastPart := otherRelevantParts[len(otherRelevantParts)-1]
+          otherLastPart = strings.TrimSuffix(otherLastPart, filepath.Ext(otherLastPart))
+          otherRelevantParts[len(otherRelevantParts)-1] = otherLastPart
+
+          var otherCandidate string
+          if naming == "snake" {
+            var prefixParts []string
+            for j := 0; j < len(otherRelevantParts)-1; j++ {
+              prefixParts = append(prefixParts, strings.Title(otherRelevantParts[j]))
+            }
+            basePart := otherRelevantParts[len(otherRelevantParts)-1]
+            basePart = strings.ReplaceAll(basePart, "-", "_")
+            basePart = strings.ReplaceAll(basePart, ".", "_")
+            if len(prefixParts) > 0 {
+              otherCandidate = strings.Join(prefixParts, "_") + "_" + basePart
+            } else {
+              otherCandidate = strings.Title(basePart)
+            }
+          } else {
+            otherCandidate = toPascalCase(strings.Join(otherRelevantParts, "/"))
+          }
+
+          if otherCandidate == candidate {
+            isUnique = false
+            break
+          }
+        }
+
+        if isUnique {
           varName = candidate
           break
         }
       }
     }
 
-    usedNames[varName] = true
     result[i] = varName
   }
 

@@ -309,6 +309,18 @@ func TestResolveUniqueVarNames(t *testing.T) {
 			},
 		},
 		{
+			name: "same immediate parent different grandparent",
+			paths: []string{
+				"a/b/visitors.json",
+				"d/b/visitors.json",
+			},
+			naming: "pascal",
+			expected: []string{
+				"ABVisitors",
+				"DBVisitors",
+			},
+		},
+		{
 			name:     "single file",
 			paths:    []string{".schemas/create-tables.sql"},
 			naming:   "pascal",
@@ -362,6 +374,73 @@ func TestToPascalCase(t *testing.T) {
 			result := toPascalCase(tt.input)
 			if result != tt.expected {
 				t.Errorf("toPascalCase(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestResolveUniquePaths(t *testing.T) {
+	tests := []struct {
+		name     string
+		files    []fileInfo
+		expected []string
+	}{
+		{
+			name: "all unique filenames",
+			files: []fileInfo{
+				{sourcePath: "a/b/config.json", shortName: "config.json"},
+				{sourcePath: "a/b/users.json", shortName: "users.json"},
+				{sourcePath: "a/b/orders.json", shortName: "orders.json"},
+			},
+			expected: []string{"config.json", "users.json", "orders.json"},
+		},
+		{
+			name: "duplicate filenames different parents",
+			files: []fileInfo{
+				{sourcePath: "indices/mapping/search/visitors.json", shortName: "visitors.json"},
+				{sourcePath: "indices/settings/search/visitors.json", shortName: "visitors.json"},
+			},
+			expected: []string{"mapping/search/visitors.json", "settings/search/visitors.json"},
+		},
+		{
+			name: "duplicate filenames same immediate parent",
+			files: []fileInfo{
+				{sourcePath: "indices/mapping/search/session_tokens.json", shortName: "session_tokens.json"},
+				{sourcePath: "indices/settings/search/session_tokens.json", shortName: "session_tokens.json"},
+			},
+			expected: []string{"mapping/search/session_tokens.json", "settings/search/session_tokens.json"},
+		},
+		{
+			name: "mixed unique and duplicate",
+			files: []fileInfo{
+				{sourcePath: "src/config.xml", shortName: "config.xml"},
+				{sourcePath: "mapping/visitors.json", shortName: "visitors.json"},
+				{sourcePath: "settings/visitors.json", shortName: "visitors.json"},
+				{sourcePath: "src/users.sql", shortName: "users.sql"},
+			},
+			expected: []string{"config.xml", "mapping/visitors.json", "settings/visitors.json", "users.sql"},
+		},
+		{
+			name: "three duplicates need different depths",
+			files: []fileInfo{
+				{sourcePath: "a/x/file.txt", shortName: "file.txt"},
+				{sourcePath: "b/x/file.txt", shortName: "file.txt"},
+				{sourcePath: "c/y/file.txt", shortName: "file.txt"},
+			},
+			expected: []string{"a/x/file.txt", "b/x/file.txt", "y/file.txt"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := resolveUniquePaths(tt.files)
+			if len(result) != len(tt.expected) {
+				t.Fatalf("length mismatch: got %d, want %d", len(result), len(tt.expected))
+			}
+			for i, r := range result {
+				if r != tt.expected[i] {
+					t.Errorf("result[%d] = %q, want %q", i, r, tt.expected[i])
+				}
 			}
 		})
 	}
