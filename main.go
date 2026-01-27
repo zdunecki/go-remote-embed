@@ -83,8 +83,8 @@ func main() {
         fmt.Fprintf(os.Stderr, "failed to create request for %s: %v\n", fileURL, err)
         os.Exit(1)
       }
-      if cfg.GithubToken != "" && strings.Contains(fileURL, "github.com") {
-        req.Header.Set("Authorization", "token "+cfg.GithubToken)
+      if cfg.GithubToken != "" && (strings.Contains(fileURL, "github.com") || strings.Contains(fileURL, "githubusercontent.com")) {
+        req.Header.Set("Authorization", "Bearer "+cfg.GithubToken)
       }
       resp, err := http.DefaultClient.Do(req)
       if err != nil {
