@@ -61,7 +61,13 @@ func main() {
     outDir = "."
   }
 
-  var embedVars []string
+  // First pass: download/copy files and collect embed paths
+  type embedInfo struct {
+    relEmbedPath string
+    shortName    string
+  }
+  var embedInfos []embedInfo
+
   for _, fileURL := range cfg.Files {
     // Expand environment variables in file URL
     fileURL = expandEnvVars(fileURL)
@@ -136,17 +142,29 @@ func main() {
         os.Exit(1)
       }
     }
-    varName := toGoVarName(shortName, cfg.VarNaming)
-    // Use relative path for go:embed (relative to the directory containing go-output)
+
+    // Calculate relative embed path
     fullPath := filepath.Join(outPath, shortName)
     goOutputDir := filepath.Dir(cfg.GoOutput)
     relEmbedPath := fullPath
     if goOutputDir != "." && goOutputDir != "" {
-      // Make path relative to the go-output directory
       relEmbedPath, _ = filepath.Rel(goOutputDir, fullPath)
     }
     relEmbedPath = filepath.ToSlash(relEmbedPath)
-    embedVars = append(embedVars, fmt.Sprintf("//go:embed %s\nvar %s string\n", relEmbedPath, varName))
+    embedInfos = append(embedInfos, embedInfo{relEmbedPath: relEmbedPath, shortName: shortName})
+  }
+
+  // Resolve unique variable names
+  embedPaths := make([]string, len(embedInfos))
+  for i, info := range embedInfos {
+    embedPaths[i] = info.relEmbedPath
+  }
+  varNames := resolveUniqueVarNames(embedPaths, cfg.VarNaming)
+
+  // Generate embed vars
+  var embedVars []string
+  for i, info := range embedInfos {
+    embedVars = append(embedVars, fmt.Sprintf("//go:embed %s\nvar %s string\n", info.relEmbedPath, varNames[i]))
   }
 
   // 3. Detect package name
@@ -266,10 +284,15 @@ func toGoVarName(name string, naming string) string {
     return strings.Title(name)
   }
   // Default: PascalCase
+  return toPascalCase(name)
+}
+
+// toPascalCase converts a string to PascalCase
+func toPascalCase(name string) string {
   var parts []string
   current := ""
   for _, r := range name {
-    if r == '-' || r == '_' || r == '.' {
+    if r == '-' || r == '_' || r == '.' || r == '/' {
       if current != "" {
         parts = append(parts, current)
         current = ""
@@ -285,5 +308,75 @@ func toGoVarName(name string, naming string) string {
   for _, part := range parts {
     result += strings.Title(strings.ToLower(part))
   }
+  return result
+}
+
+// resolveUniqueVarNames takes a list of embed paths and returns unique variable names
+// by including parent directory parts when there are duplicates
+func resolveUniqueVarNames(paths []string, naming string) []string {
+  // First pass: get base var names and detect duplicates
+  baseNames := make([]string, len(paths))
+  nameCount := make(map[string]int)
+
+  for i, p := range paths {
+    baseName := filepath.Base(p)
+    varName := toGoVarName(baseName, naming)
+    baseNames[i] = varName
+    nameCount[varName]++
+  }
+
+  // Second pass: for duplicates, include more path components
+  result := make([]string, len(paths))
+  usedNames := make(map[string]bool)
+
+  for i, p := range paths {
+    varName := baseNames[i]
+
+    if nameCount[varName] > 1 {
+      // Need to make unique - include parent directories
+      pathParts := strings.Split(filepath.ToSlash(p), "/")
+      // Try adding more path components until unique
+      for depth := 2; depth <= len(pathParts); depth++ {
+        startIdx := len(pathParts) - depth
+        if startIdx < 0 {
+          startIdx = 0
+        }
+        relevantParts := pathParts[startIdx:]
+        // Build var name from path parts (excluding extension from last part)
+        lastPart := relevantParts[len(relevantParts)-1]
+        lastPart = strings.TrimSuffix(lastPart, filepath.Ext(lastPart))
+        relevantParts[len(relevantParts)-1] = lastPart
+
+        var candidate string
+        if naming == "snake" {
+          // For snake case: Title only the prefix parts, keep base name lowercase with underscores
+          var prefixParts []string
+          for j := 0; j < len(relevantParts)-1; j++ {
+            prefixParts = append(prefixParts, strings.Title(relevantParts[j]))
+          }
+          // Base part: replace - and . with _, keep lowercase
+          basePart := relevantParts[len(relevantParts)-1]
+          basePart = strings.ReplaceAll(basePart, "-", "_")
+          basePart = strings.ReplaceAll(basePart, ".", "_")
+          if len(prefixParts) > 0 {
+            candidate = strings.Join(prefixParts, "_") + "_" + basePart
+          } else {
+            candidate = strings.Title(basePart)
+          }
+        } else {
+          // For pascal case: use toPascalCase
+          candidate = toPascalCase(strings.Join(relevantParts, "/"))
+        }
+        if !usedNames[candidate] {
+          varName = candidate
+          break
+        }
+      }
+    }
+
+    usedNames[varName] = true
+    result[i] = varName
+  }
+
   return result
 }

@@ -252,3 +252,117 @@ func TestOutputPathWithShortNamePlaceholder(t *testing.T) {
 func replaceShortName(outDir, shortName string) string {
 	return strings.ReplaceAll(outDir, "<short_name>", strings.TrimSuffix(shortName, filepath.Ext(shortName)))
 }
+
+func TestResolveUniqueVarNames(t *testing.T) {
+	tests := []struct {
+		name     string
+		paths    []string
+		naming   string
+		expected []string
+	}{
+		{
+			name:     "no duplicates",
+			paths:    []string{".schemas/config.xml", ".schemas/users.json", ".schemas/orders.sql"},
+			naming:   "pascal",
+			expected: []string{"Config", "Users", "Orders"},
+		},
+		{
+			name: "duplicates with different parent dirs",
+			paths: []string{
+				".schemas/visitors.json",
+				".schemas/session_views.json",
+				".indices/mapping/visitors.json",
+				".indices/settings/visitors.json",
+			},
+			naming: "pascal",
+			expected: []string{
+				"SchemasVisitors",
+				"SessionViews",
+				"MappingVisitors",
+				"SettingsVisitors",
+			},
+		},
+		{
+			name: "multiple duplicates same name",
+			paths: []string{
+				"a/config.json",
+				"b/config.json",
+				"c/config.json",
+			},
+			naming: "pascal",
+			expected: []string{
+				"AConfig",
+				"BConfig",
+				"CConfig",
+			},
+		},
+		{
+			name: "deep path duplicates",
+			paths: []string{
+				"level1/level2/level3/file.txt",
+				"other1/other2/other3/file.txt",
+			},
+			naming: "pascal",
+			expected: []string{
+				"Level3File",
+				"Other3File",
+			},
+		},
+		{
+			name:     "single file",
+			paths:    []string{".schemas/create-tables.sql"},
+			naming:   "pascal",
+			expected: []string{"CreateTables"},
+		},
+		{
+			name: "snake naming with duplicates",
+			paths: []string{
+				"mapping/session_tokens.json",
+				"settings/session_tokens.json",
+			},
+			naming: "snake",
+			expected: []string{
+				"Mapping_session_tokens",
+				"Settings_session_tokens",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := resolveUniqueVarNames(tt.paths, tt.naming)
+			if len(result) != len(tt.expected) {
+				t.Fatalf("length mismatch: got %d, want %d", len(result), len(tt.expected))
+			}
+			for i, r := range result {
+				if r != tt.expected[i] {
+					t.Errorf("result[%d] = %q, want %q", i, r, tt.expected[i])
+				}
+			}
+		})
+	}
+}
+
+func TestToPascalCase(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"hello", "Hello"},
+		{"hello-world", "HelloWorld"},
+		{"hello_world", "HelloWorld"},
+		{"hello.world", "HelloWorld"},
+		{"hello/world", "HelloWorld"},
+		{"mapping/session_tokens", "MappingSessionTokens"},
+		{"a/b/c", "ABC"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result := toPascalCase(tt.input)
+			if result != tt.expected {
+				t.Errorf("toPascalCase(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
