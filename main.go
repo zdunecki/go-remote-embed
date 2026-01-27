@@ -19,6 +19,7 @@ type EmbedConfig struct {
   Files       []string `yaml:"files"`
   GoMod       string   `yaml:"go-mod"`
   GithubToken string   `yaml:"github-token"`
+  VarNaming   string   `yaml:"var-naming"` // "pascal" (default) or "snake"
 }
 
 func main() {
@@ -135,7 +136,7 @@ func main() {
         os.Exit(1)
       }
     }
-    varName := toGoVarName(shortName)
+    varName := toGoVarName(shortName, cfg.VarNaming)
     // Use relative path for go:embed
     relEmbedPath := filepath.ToSlash(filepath.Join(outPath, shortName))
     embedVars = append(embedVars, fmt.Sprintf("//go:embed %s\nvar %s string\n", relEmbedPath, varName))
@@ -249,10 +250,33 @@ func expandEnvVars(s string) string {
 }
 
 // toGoVarName converts a file name to a Go exported variable name
-func toGoVarName(name string) string {
+// naming: "pascal" (default) -> PascalCase, "snake" -> Snake_Case
+func toGoVarName(name string, naming string) string {
   name = strings.TrimSuffix(name, filepath.Ext(name))
-  name = strings.ReplaceAll(name, "-", "_")
-  name = strings.ReplaceAll(name, ".", "_")
-  name = strings.Title(name)
-  return name
+  if naming == "snake" {
+    name = strings.ReplaceAll(name, "-", "_")
+    name = strings.ReplaceAll(name, ".", "_")
+    return strings.Title(name)
+  }
+  // Default: PascalCase
+  var parts []string
+  current := ""
+  for _, r := range name {
+    if r == '-' || r == '_' || r == '.' {
+      if current != "" {
+        parts = append(parts, current)
+        current = ""
+      }
+    } else {
+      current += string(r)
+    }
+  }
+  if current != "" {
+    parts = append(parts, current)
+  }
+  var result string
+  for _, part := range parts {
+    result += strings.Title(strings.ToLower(part))
+  }
+  return result
 }

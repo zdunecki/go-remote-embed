@@ -12,26 +12,73 @@ import (
 )
 
 func TestToGoVarName(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		{"hello.txt", "Hello"},
-		{"my-file.txt", "My_file"},
-		{"some.config.yaml", "Some_config"},
-		{"simple", "Simple"},
-		{"with-many-dashes.go", "With_many_dashes"},
-		{"file.name.with.dots.txt", "File_name_with_dots"},
-	}
+	t.Run("default", func(t *testing.T) {
+		tests := []struct {
+			input    string
+			expected string
+		}{
+			{"hello.txt", "Hello"},
+			{"my-file.txt", "MyFile"},
+			{"some.config.yaml", "SomeConfig"},
+		}
 
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			result := toGoVarName(tt.input)
-			if result != tt.expected {
-				t.Errorf("toGoVarName(%q) = %q, want %q", tt.input, result, tt.expected)
-			}
-		})
-	}
+		for _, tt := range tests {
+			t.Run(tt.input, func(t *testing.T) {
+				result := toGoVarName(tt.input, "")
+				if result != tt.expected {
+					t.Errorf("toGoVarName(%q, \"pascal\") = %q, want %q", tt.input, result, tt.expected)
+				}
+			})
+		}
+	})
+
+	t.Run("pascal", func(t *testing.T) {
+		tests := []struct {
+			input    string
+			expected string
+		}{
+			{"hello.txt", "Hello"},
+			{"my-file.txt", "MyFile"},
+			{"some.config.yaml", "SomeConfig"},
+			{"simple", "Simple"},
+			{"with-many-dashes.go", "WithManyDashes"},
+			{"file.name.with.dots.txt", "FileNameWithDots"},
+			{"config_xml.xml", "ConfigXml"},
+			{"create_tables.sql", "CreateTables"},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.input, func(t *testing.T) {
+				result := toGoVarName(tt.input, "pascal")
+				if result != tt.expected {
+					t.Errorf("toGoVarName(%q, \"pascal\") = %q, want %q", tt.input, result, tt.expected)
+				}
+			})
+		}
+	})
+
+	t.Run("snake", func(t *testing.T) {
+		tests := []struct {
+			input    string
+			expected string
+		}{
+			{"hello.txt", "Hello"},
+			{"my-file.txt", "My_file"},
+			{"some.config.yaml", "Some_config"},
+			{"simple", "Simple"},
+			{"with-many-dashes.go", "With_many_dashes"},
+			{"file.name.with.dots.txt", "File_name_with_dots"},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.input, func(t *testing.T) {
+				result := toGoVarName(tt.input, "snake")
+				if result != tt.expected {
+					t.Errorf("toGoVarName(%q, \"snake\") = %q, want %q", tt.input, result, tt.expected)
+				}
+			})
+		}
+	})
 }
 
 func TestEmbedConfigParsing(t *testing.T) {

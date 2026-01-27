@@ -90,6 +90,7 @@ files:
 | `go-output` | Name of the generated Go file | `embed.go` |
 | `go-mod` | Package name for the generated file | Auto-detected from `go.mod` or `.go` files |
 | `github-token` | GitHub token for accessing private repositories. Supports environment variable expansion (e.g., `$GITHUB_TOKEN` or `${GITHUB_TOKEN}`). | - |
+| `var-naming` | Naming convention for generated Go variables: `pascal` (PascalCase) or `snake` (Snake_Case) | `pascal` |
 | `files` | List of URLs or local file paths to embed | Required |
 
 ### Placeholder Support

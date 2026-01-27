@@ -27,6 +27,13 @@
       "description": "GitHub token for accessing private repositories. Supports environment variable expansion (e.g., $GITHUB_TOKEN or ${GITHUB_TOKEN}).",
       "examples": ["$GITHUB_TOKEN", "${GITHUB_TOKEN}"]
     },
+    "var-naming": {
+      "type": "string",
+      "description": "Naming convention for generated Go variables.",
+      "enum": ["pascal", "snake"],
+      "default": "pascal",
+      "examples": ["pascal", "snake"]
+    },
     "files": {
       "type": "array",
       "description": "List of URLs or local file paths to embed. Supports environment variable expansion.",
