@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/zdunecki/go-remote-embed/master/embed.schema.json",
+  "title": "go-remote-embed configuration",
+  "description": "Configuration schema for go-remote-embed tool",
+  "type": "object",
+  "properties": {
+    "output": {
+      "type": "string",
+      "description": "Directory where files will be saved. Supports <short_name> placeholder which is replaced with the filename (without extension).",
+      "default": ".",
+      "examples": ["./.schemas", "assets/<short_name>"]
+    },
+    "go-output": {
+      "type": "string",
+      "description": "Name of the generated Go file with embed directives.",
+      "default": "embed.go",
+      "examples": ["embed.go", "assets.go"]
+    },
+    "go-mod": {
+      "type": "string",
+      "description": "Package name for the generated Go file. If not specified, auto-detected from go.mod or existing .go files.",
+      "examples": ["main", "assets", "schemas"]
+    },
+    "github-token": {
+      "type": "string",
+      "description": "GitHub token for accessing private repositories. Supports environment variable expansion (e.g., $GITHUB_TOKEN or ${GITHUB_TOKEN}).",
+      "examples": ["$GITHUB_TOKEN", "${GITHUB_TOKEN}"]
+    },
+    "files": {
+      "type": "array",
+      "description": "List of URLs or local file paths to embed. Supports environment variable expansion.",
+      "items": {
+        "type": "string",
+        "description": "URL or local file path. Environment variables like $VAR or ${VAR} are expanded."
+      },
+      "minItems": 1,
+      "examples": [
+        ["https://example.com/schema.json"],
+        ["$BASE_URL/config.yaml", "local/file.txt"]
+      ]
+    }
+  },
+  "required": ["files"],
+  "additionalProperties": false
+}

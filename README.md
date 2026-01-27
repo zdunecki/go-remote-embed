@@ -14,8 +14,53 @@ A tool that downloads remote files and generates Go embed directives for them.
 
 ## Installation
 
+### Go 1.24+
+
+Add as a tool dependency in your `go.mod`:
+
 ```bash
 go get -tool github.com/zdunecki/go-remote-embed@latest
+```
+
+Then run with:
+
+```bash
+go tool go-remote-embed
+```
+
+Or use with `go:generate`:
+
+```go
+//go:generate go tool go-remote-embed
+```
+
+### Go < 1.24
+
+It is recommended to follow the `tools.go` pattern for managing the dependency.
+
+Create `tools/tools.go`:
+
+```go
+//go:build tools
+
+package tools
+
+import (
+	_ "github.com/zdunecki/go-remote-embed"
+)
+```
+
+Then use with `go:generate`:
+
+```go
+//go:generate go run github.com/zdunecki/go-remote-embed
+```
+
+Alternatively, install as a global binary:
+
+```bash
+go install github.com/zdunecki/go-remote-embed@latest
+go-remote-embed
 ```
 
 ## Usage
@@ -31,11 +76,7 @@ files:
   - "local/file.txt"
 ```
 
-2. Run the tool:
-
-```bash
-//go:generate go-remote-embed
-```
+2. Run the tool (see Installation above for the correct command for your Go version)
 
 3. The tool will:
    - Download remote files (or copy local files) to the output directory
@@ -92,6 +133,33 @@ Example `.env` file:
 ```
 BASE_URL=https://raw.githubusercontent.com/myorg/repo/main
 GITHUB_TOKEN=ghp_xxxxxxxxxxxx
+```
+
+## JSON Schema
+
+A JSON schema is available for IDE autocompletion and validation.
+
+### VS Code with YAML extension
+
+Add to your `embed.yaml`:
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/zdunecki/go-remote-embed/master/embed.schema.json
+output: ./.schemas
+files:
+  - "https://example.com/schema.json"
+```
+
+### VS Code settings.json
+
+Alternatively, configure globally in `.vscode/settings.json`:
+
+```json
+{
+  "yaml.schemas": {
+    "https://raw.githubusercontent.com/zdunecki/go-remote-embed/master/embed.schema.json": "embed.yaml"
+  }
+}
 ```
 
 ## Example
