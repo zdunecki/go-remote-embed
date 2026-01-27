@@ -1,5 +1,5 @@
 output: ./.schemas
 go-output: embed.go
-go-mod: test
+go-mod: main
 files:
   - "https://raw.githubusercontent.com/livesession/xyd/refs/heads/master/package.json"
